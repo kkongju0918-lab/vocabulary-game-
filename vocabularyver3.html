@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>영단어 퀴즈 PC</title>
+<style>
+body { font-family: Arial; background: #111; color: #fff; text-align: center; }
+#main { max-width: 600px; margin: auto; padding: 20px; }
+button { display: block; width: 100%; margin: 10px 0; padding: 15px; font-size: 16px; }
+.correct { background: #2ecc71; }
+.wrong { background: #e74c3c; }
+.flash-correct { animation: flashGreen 0.3s; }
+.flash-wrong { animation: flashRed 0.3s; }
+@keyframes flashGreen { from {background:#000;} to{background:#2ecc71;} }
+@keyframes flashRed { from{background:#000;} to{background:#e74c3c;} }
+.shake { animation: shake 0.3s; }
+@keyframes shake {
+  0%{transform:translateX(0)} 25%{transform:translateX(-5px)}
+  50%{transform:translateX(5px)} 75%{transform:translateX(-5px)}
+  100%{transform:translateX(0)}
+}
+#result, #ranking { display:none; }
+#timer { height: 12px; background:#4a6cff; transition: width 1s linear; margin-bottom:10px;}
+</style>
+</head>
+<body>
+<div id="main">
+  <h1>📝 수능 필수 영단어 게임! 🎯</h1>
+  <input id="name" placeholder="닉네임 입력"><br><br>
+  <button onclick="startGame()">게임 시작</button>
+</div>
+<div id="quiz" style="display:none;">
+  <h2 id="word"></h2>
+  <p id="life"></p>
+  <p id="score"></p>
+  <div id="timer"></div>
+  <div id="choices"></div>
+</div>
+
+<div id="result">
+  <h2>게임 종료</h2>
+  <p id="finalScore"></p>
+  <h3>❌ 틀린 단어</h3>
+  <ul id="wrongList"></ul>
+  <button onclick="showRanking()">랭킹 보기</button>
+</div>
+
+<div id="ranking">
+  <h2>🏆 랭킹보드</h2>
+  <ol id="rankList"></ol>
+  <button onclick="location.reload()">다시 하기</button>
+</div>
+
+<script>
+// 고3 필수 100단어 배열
+const allQuiz = [
+ ["achieve","달성하다"], ["acquire","획득하다"], ["adapt","적응하다"], ["adjust","조정하다"],
+ ["analyze","분석하다"], ["apply","적용하다"], ["approve","승인하다"], ["assume","가정하다"],
+ ["attach","붙이다"], ["attempt","시도하다"], ["benefit","이익, 혜택"], ["calculate","계산하다"],
+ ["capture","포획하다, 붙잡다"], ["challenge","도전, 도전하다"], ["clarify","명확히 하다"],
+ ["combine","결합하다"], ["compare","비교하다"], ["complete","완성하다"], ["conclude","결론짓다"],
+ ["confirm","확인하다"], ["connect","연결하다"], ["consider","고려하다"], ["construct","건설하다, 구성하다"],
+ ["contrast","대조하다"], ["contribute","기여하다"], ["convert","변환하다"], ["create","창조하다"],
+ ["define","정의하다"], ["demonstrate","보여주다, 입증하다"], ["depend","의존하다"], ["describe","묘사하다"],
+ ["design","설계하다"], ["determine","결정하다"], ["develop","발전시키다, 개발하다"], ["discover","발견하다"],
+ ["discuss","논의하다"], ["distinguish","구별하다"], ["divide","나누다"], ["emphasize","강조하다"],
+ ["encourage","격려하다"], ["establish","설립하다, 확립하다"], ["evaluate","평가하다"], ["examine","조사하다, 검토하다"],
+ ["exist","존재하다"], ["expand","확장하다"], ["explain","설명하다"], ["explore","탐험하다, 탐구하다"],
+ ["express","표현하다"], ["focus","집중하다"], ["form","형성하다"], ["function","기능하다"],
+ ["generate","생성하다"], ["identify","확인하다, 식별하다"], ["illustrate","설명하다, 그림으로 보여주다"],
+ ["improve","향상시키다"], ["include","포함하다"], ["indicate","나타내다, 가리키다"], ["influence","영향을 미치다"],
+ ["inform","알리다, 통지하다"], ["initiate","시작하다"], ["inspire","영감을 주다"], ["integrate","통합하다"],
+ ["interpret","해석하다"], ["introduce","소개하다, 도입하다"], ["investigate","조사하다"], ["involve","포함하다, 관련시키다"],
+ ["maintain","유지하다"], ["manage","관리하다"], ["measure","측정하다"], ["mention","언급하다"],
+ ["motivate","동기를 부여하다"], ["observe","관찰하다"], ["obtain","얻다"], ["organize","조직하다"],
+ ["participate","참여하다"], ["perform","수행하다"], ["persuade","설득하다"], ["predict","예측하다"],
+ ["prepare","준비하다"], ["present","제시하다, 발표하다"], ["prevent","막다, 예방하다"], ["produce","생산하다"],
+ ["promote","촉진하다, 홍보하다"], ["propose","제안하다"], ["provide","제공하다"], ["react","반응하다"],
+ ["recognize","인정하다, 알아보다"], ["recommend","추천하다"], ["reflect","반영하다, 반사하다"], ["relate","관련시키다"],
+ ["represent","대표하다, 나타내다"], ["require","요구하다"], ["research","연구하다"], ["respond","반응하다"],
+ ["revise","수정하다"], ["select","선택하다"], ["share","공유하다"], ["simplify","단순화하다"],
+ ["solve","해결하다"], ["specify","명시하다"], ["stimulate","자극하다"], ["study","공부하다, 연구하다"],
+ ["suggest","제안하다"], ["summarize","요약하다"], ["support","지원하다, 지지하다"], ["survive","생존하다"],
+ ["sustain","유지하다"], ["translate","번역하다"], ["understand","이해하다"], ["update","갱신하다, 업데이트하다"],
+ ["use","사용하다"], ["utilize","활용하다"], ["validate","입증하다, 검증하다"], ["vary","다양하게 하다"],
+ ["verify","확인하다, 검증하다"], ["view","보다, 관점"], ["visualize","시각화하다"], ["withdraw","철회하다"]
+];
+
+let quiz=[], idx=0, score=0, life=3, wrongWords=[], timerInterval;
+const TIME_LIMIT=10;
+
+function startGame(){
+  const name = document.getElementById("name").value;
+  if(!name) return alert("닉네임 입력!");
+  localStorage.setItem("currentUser", name);
+
+  quiz = [...allQuiz].sort(()=>Math.random()-0.5); // 랜덤 배치
+  document.getElementById("main").style.display="none";
+  document.getElementById("quiz").style.display="block";
+  loadQ();
+}
+
+function updateLife(){
+  document.getElementById("life").innerText="❤️ 남은 목숨: "+ "❤️".repeat(life);
+}
+
+function loadQ(){
+  clearInterval(timerInterval);
+  if(idx>=quiz.length || life<=0) return endGame();
+  updateLife();
+  document.getElementById("score").innerText="SCORE: "+score;
+  document.body.className="";
+  document.getElementById("quiz").classList.remove("shake");
+
+  const [word,correct]=quiz[idx];
+  document.getElementById("word").innerText=word;
+  const pool=[...allQuiz].map(x=>x[1]).filter(a=>a!==correct).sort(()=>Math.random()-0.5);
+  const choices=[correct,...pool.slice(0,3)].sort(()=>Math.random()-0.5);
+
+  const div=document.getElementById("choices");
+  div.innerHTML="";
+  choices.forEach(c=>{
+    const b=document.createElement("button");
+    b.innerText=c;
+    b.onclick=()=>check(b,correct,word);
+    div.appendChild(b);
+  });
+
+  let t=TIME_LIMIT;
+  document.getElementById("timer").style.width="100%";
+  timerInterval=setInterval(()=>{
+    t--;
+    document.getElementById("timer").style.width=(t/TIME_LIMIT*100)+"%";
+    if(t<=0){
+      clearInterval(timerInterval);
+      life--;
+      wrongWords.push(word+" : "+correct);
+      document.body.className="flash-wrong";
+      document.getElementById("quiz").classList.add("shake");
+      idx++;
+      setTimeout(loadQ,600);
+    }
+  },1000);
+}
+
+function check(btn,correct,word){
+  clearInterval(timerInterval);
+  const buttons=document.querySelectorAll("#choices button");
+  buttons.forEach(b=>b.onclick=null);
+
+  if(btn.innerText===correct){
+    btn.classList.add("correct");
+    document.body.className="flash-correct";
+    score+=10;
+  } else {
+    btn.classList.add("wrong");
+    document.body.className="flash-wrong";
+    document.getElementById("quiz").classList.add("shake");
+    life--;
+    wrongWords.push(word+" : "+correct);
+  }
+  idx++;
+  setTimeout(loadQ,700);
+}
+
+function endGame(){
+  document.getElementById("quiz").style.display="none";
+  document.getElementById("result").style.display="block";
+  document.getElementById("finalScore").innerText="최종 점수: "+score;
+
+  const ul=document.getElementById("wrongList");
+  wrongWords.forEach(w=>{
+    const li=document.createElement("li");
+    li.innerText=w;
+    ul.appendChild(li);
+  });
+
+  // 랭킹 저장
+  const ranking=JSON.parse(localStorage.getItem("ranking")||"[]");
+  ranking.push({name: localStorage.getItem("currentUser"), score});
+  ranking.sort((a,b)=>b.score-a.score);
+  localStorage.setItem("ranking",JSON.stringify(ranking));
+}
+
+function showRanking(){
+  document.getElementById("result").style.display="none";
+  document.getElementById("ranking").style.display="block";
+  const list=document.getElementById("rankList");
+  list.innerHTML="";
+  JSON.parse(localStorage.getItem("ranking")||"[]").slice(0,10).forEach(r=>{
+    const li=document.createElement("li");
+    li.innerText=`${r.name} | ${r.score}점`;
+    list.appendChild(li);
+  });
+}
+</script>
+</body>
+</html>
